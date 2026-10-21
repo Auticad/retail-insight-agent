@@ -1,0 +1,25 @@
+# Build
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Segreti e configurazione locale: MAI nel repository
+.env
+*.env.local
+
+# File generati a runtime
+logs/
+output/

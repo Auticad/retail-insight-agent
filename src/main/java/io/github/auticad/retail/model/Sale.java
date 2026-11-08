@@ -1,16 +1,31 @@
 package io.github.auticad.retail.model;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Objects;
 
-public record Sale(String storeId, String sku, LocalDate date, int quantity, double unitPrice) {
+/**
+ * Riga di vendita: un dato che non deve cambiare, quindi un record.
+ * Stessi campi di data/sales.csv e della tabella sales del database.
+ */
+public record Sale(String storeId, String sku, LocalDate date, int quantity, BigDecimal unitPrice) {
 
-    // costruttore compatto: validazione senza riassegnare i campi
+    // costruttore compatto: valida i parametri prima che diventino campi
     public Sale {
-        if (quantity <= 0) throw new IllegalArgumentException("quantità non positiva");
-        if (unitPrice < 0) throw new IllegalArgumentException("prezzo negativo");
+        Objects.requireNonNull(storeId, "storeId obbligatorio");
+        Objects.requireNonNull(sku, "sku obbligatorio");
+        Objects.requireNonNull(date, "data obbligatoria");
+        Objects.requireNonNull(unitPrice, "prezzo obbligatorio");
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("quantità non positiva: " + quantity);
+        }
+        if (unitPrice.signum() < 0) {
+            throw new IllegalArgumentException("prezzo negativo: " + unitPrice);
+        }
     }
 
-    public double amount() {
-        return quantity * unitPrice;
+    /** Importo della riga = quantità × prezzo unitario. */
+    public BigDecimal amount() {
+        return unitPrice.multiply(BigDecimal.valueOf(quantity));
     }
 }

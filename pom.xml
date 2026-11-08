@@ -5,36 +5,34 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>io.github.auticad</groupId>
-  <artifactId>retail-insight-agent</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
-  <name>Retail Insight Agent</name>
-  <description>Analisi delle vendite di una catena retail con un agente AI in Java</description>
+  <!-- artifactId diverso dal repository: in Eclipse i due progetti possono stare nello stesso workspace -->
+  <artifactId>retail-insight-agent-soluzione-b</artifactId>
+  <version>0.3.0-SNAPSHOT</version>
+  <name>Retail Insight Agent - soluzione guida B</name>
+  <description>Soluzione di riferimento del progetto guida a fine guida B (tappe 8-11)</description>
 
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <junit.version>6.1.2</junit.version>
   </properties>
 
-  <!--
-    Le dipendenze si aggiungono seguendo le guide:
-    giorno 9  JUnit (test)          giorno 17 Jackson (JSON)
-    giorno 18 driver PostgreSQL     giorno 22 LangChain4j (opzionale)
-  -->
   <dependencies>
-  	<dependency>
-    	<groupId>org.junit.jupiter</groupId>
-    	<artifactId>junit-jupiter</artifactId>
-    	<version>6.0.3</version>
-    	<scope>test</scope>
-  	</dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
+
   <build>
-  	<plugins>
-    	<plugin>
-      		<groupId>org.apache.maven.plugins</groupId>
-      		<artifactId>maven-surefire-plugin</artifactId>
-      		<version>3.5.2</version>
-    	</plugin>
-  	</plugins>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.6.1</version>
+      </plugin>
+    </plugins>
   </build>
 </project>

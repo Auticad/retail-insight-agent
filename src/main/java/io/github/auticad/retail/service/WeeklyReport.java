@@ -1,95 +1,129 @@
 package io.github.auticad.retail.service;
 
+import io.github.auticad.retail.model.Sale;
 import io.github.auticad.retail.model.Store;
+import io.github.auticad.retail.repository.Repository;
+
+import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
- * Report settimanale su una matrice pezzi[negozio][giorno].
- * Rispetto alla guida A riceve Store[] invece di String[] (tappa 8).
+ * Report di una settimana (da lunedì a domenica) calcolato dalle vendite:
+ * pezzi per negozio e giorno, totale pezzi e fatturato.
+ * Le righe sono ordinate per fatturato decrescente e, a parità, per nome del negozio.
  */
 public final class WeeklyReport {
 
-    public static final String[] GIORNI = {"lun", "mar", "mer", "gio", "ven", "sab", "dom"};
+    public static final List<String> GIORNI = List.of("lun", "mar", "mer", "gio", "ven", "sab", "dom");
 
     private static final int LARGHEZZA_NOME = 14;
+
+    /** Riga del report: un negozio con i pezzi per giorno della settimana. */
+    public record Row(Store store, Map<DayOfWeek, Integer> pieces, int totalPieces, BigDecimal revenue) {
+
+        public int piecesOn(DayOfWeek day) {
+            return pieces.getOrDefault(day, 0);
+        }
+    }
+
+    /** Ordine del report: fatturato decrescente, poi nome. Pubblico per poterlo testare da solo. */
+    public static final Comparator<Row> ORDINE =
+            Comparator.comparing(Row::revenue).reversed()
+                    .thenComparing(r -> r.store().getName());
 
     private WeeklyReport() {
     }
 
-    /** Somma di ogni riga: pezzi venduti in settimana da ciascun negozio. */
-    public static int[] totaliPerNegozio(int[][] pezzi) {
-        int[] totali = new int[pezzi.length];
-        for (int n = 0; n < pezzi.length; n++) {
-            for (int g = 0; g < pezzi[n].length; g++) {
-                totali[n] += pezzi[n][g];
-            }
-        }
-        return totali;
+    /** Lunedì dell'ultima settimana completa presente nei dati (quella che finisce con l'ultima domenica). */
+    public static Optional<LocalDate> lastFullWeekMonday(Collection<Sale> sales) {
+        return sales.stream()
+                .map(Sale::date)
+                .max(Comparator.naturalOrder())
+                .map(last -> last.getDayOfWeek() == DayOfWeek.SUNDAY
+                        ? last
+                        : last.with(TemporalAdjusters.previous(DayOfWeek.SUNDAY)))
+                .map(sunday -> sunday.minusDays(6));
     }
 
-    /** Somma di ogni colonna: pezzi venduti dalla catena in ciascun giorno. */
-    public static int[] totaliPerGiorno(int[][] pezzi) {
-        int[] totali = new int[GIORNI.length];
-        for (int[] riga : pezzi) {
-            for (int g = 0; g < riga.length; g++) {
-                totali[g] += riga[g];
-            }
+    /** Righe della settimana che inizia da monday, una per ogni negozio dell'anagrafica, già ordinate. */
+    public static List<Row> rows(Collection<Sale> sales, Repository<Store, String> stores, LocalDate monday) {
+        if (monday.getDayOfWeek() != DayOfWeek.MONDAY) {
+            throw new IllegalArgumentException(monday + " non è un lunedì");
         }
-        return totali;
+        LocalDate sunday = monday.plusDays(6);
+        Map<String, List<Sale>> byStore = sales.stream()
+                .filter(s -> !s.date().isBefore(monday) && !s.date().isAfter(sunday))
+                .collect(Collectors.groupingBy(Sale::storeId));
+
+        return stores.findAll().stream()
+                .map(st -> {
+                    List<Sale> list = byStore.getOrDefault(st.getId(), List.of());
+                    Map<DayOfWeek, Integer> perDay = list.stream().collect(Collectors.groupingBy(
+                            s -> s.date().getDayOfWeek(),
+                            () -> new EnumMap<>(DayOfWeek.class),
+                            Collectors.summingInt(Sale::quantity)));
+                    return new Row(st, perDay, KpiCalculator.pezziTotali(list), KpiCalculator.fatturatoTotale(list));
+                })
+                .sorted(ORDINE)
+                .toList();
     }
 
-    /** Indice del valore massimo: serve per recuperare sia il valore sia l'etichetta. */
-    public static int indiceMassimo(int[] valori) {
-        int iMax = 0;
-        for (int i = 1; i < valori.length; i++) {
-            if (valori[i] > valori[iMax]) {
-                iMax = i;
-            }
-        }
-        return iMax;
-    }
-
-    /**
-     * Costruisce il report come testo, senza stamparlo: così si può testare.
-     * @throws IllegalArgumentException se negozi e righe della matrice non corrispondono
-     */
-    public static String genera(Store[] negozi, int[][] pezzi) {
-        if (negozi.length != pezzi.length) {
-            throw new IllegalArgumentException("negozi (" + negozi.length + ") e righe di dati (" + pezzi.length + ") non corrispondono");
-        }
-        int[] perNegozio = totaliPerNegozio(pezzi);
-        int[] perGiorno = totaliPerGiorno(pezzi);
-        String separatore = "-".repeat(LARGHEZZA_NOME + 6 * GIORNI.length + 8) + "\n";
+    /** Costruisce il report come testo, senza stamparlo: così si può testare. */
+    public static String genera(Collection<Sale> sales, Repository<Store, String> stores, LocalDate monday) {
+        List<Row> rows = rows(sales, stores, monday);
+        String separatore = "-".repeat(LARGHEZZA_NOME + 6 * GIORNI.size() + 8 + 14) + "\n";
 
         StringBuilder sb = new StringBuilder();
+        sb.append(String.format("Settimana dal %s al %s%n", monday, monday.plusDays(6)));
         sb.append(String.format("%-" + LARGHEZZA_NOME + "s", "Negozio"));
-        for (String g : GIORNI) {
-            sb.append(String.format("%6s", g));
-        }
-        sb.append(String.format("%8s%n", "Totale"));
+        GIORNI.forEach(g -> sb.append(String.format("%6s", g)));
+        sb.append(String.format("%8s%14s%n", "Pezzi", "Fatturato"));
         sb.append(separatore);
 
-        for (int n = 0; n < pezzi.length; n++) {
-            sb.append(String.format("%-" + LARGHEZZA_NOME + "s", negozi[n].getName()));
-            for (int g = 0; g < pezzi[n].length; g++) {
-                sb.append(String.format("%6d", pezzi[n][g]));
+        for (Row r : rows) {
+            sb.append(String.format("%-" + LARGHEZZA_NOME + "s", r.store().getName()));
+            for (DayOfWeek d : DayOfWeek.values()) {
+                sb.append(String.format("%6d", r.piecesOn(d)));
             }
-            sb.append(String.format("%8d%n", perNegozio[n]));
+            sb.append(String.format(Locale.ITALY, "%8d%,14.2f%n", r.totalPieces(), r.revenue()));
         }
+
+        Map<DayOfWeek, Integer> perGiorno = new EnumMap<>(DayOfWeek.class);
+        rows.forEach(r -> r.pieces().forEach((d, q) -> perGiorno.merge(d, q, Integer::sum)));
+        int pezzi = rows.stream().mapToInt(Row::totalPieces).sum();
+        BigDecimal fatturato = rows.stream().map(Row::revenue).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         sb.append(separatore);
         sb.append(String.format("%-" + LARGHEZZA_NOME + "s", "Catena"));
-        int totaleCatena = 0;
-        for (int t : perGiorno) {
-            sb.append(String.format("%6d", t));
-            totaleCatena += t;
+        for (DayOfWeek d : DayOfWeek.values()) {
+            sb.append(String.format("%6d", perGiorno.getOrDefault(d, 0)));
         }
-        sb.append(String.format("%8d%n", totaleCatena));
+        sb.append(String.format(Locale.ITALY, "%8d%,14.2f%n", pezzi, fatturato));
 
-        int gMax = indiceMassimo(perGiorno);
-        int nMax = indiceMassimo(perNegozio);
-        Store migliore = negozi[nMax];
-        sb.append(String.format("%nGiorno migliore della catena: %s (%d pezzi)%n", GIORNI[gMax], perGiorno[gMax]));
-        sb.append(String.format("Negozio migliore: %s, %s (%d pezzi)%n", migliore.getName(), migliore.getCity(), perNegozio[nMax]));
+        if (pezzi == 0) {
+            sb.append(String.format("%nNessuna vendita in questa settimana: verifica che sia coperta dai dati.%n"));
+            return sb.toString();
+        }
+        DayOfWeek migliore = perGiorno.entrySet().stream()
+                .max(Map.Entry.<DayOfWeek, Integer>comparingByValue()
+                        .thenComparing(Map.Entry.comparingByKey(Comparator.reverseOrder())))  // a parità, il giorno prima
+                .map(Map.Entry::getKey)
+                .orElseThrow();
+        Row primo = rows.get(0);
+        sb.append(String.format("%nGiorno migliore della catena: %s (%d pezzi)%n",
+                GIORNI.get(migliore.getValue() - 1), perGiorno.get(migliore)));
+        sb.append(String.format(Locale.ITALY, "Negozio migliore: %s, %s (%,.2f €)%n",
+                primo.store().getName(), primo.store().getCity(), primo.revenue()));
         return sb.toString();
     }
 }

@@ -1,5 +1,6 @@
 package io.github.auticad.retail.model;
 
+import io.github.auticad.retail.exception.InsufficientStockException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -23,7 +24,10 @@ class ProductTest {
     @Test
     void sellMoreThanStockIsRejected() {
         Product p = felpa(2);
-        assertThrows(IllegalStateException.class, () -> p.sell(5));
+        InsufficientStockException e = assertThrows(InsufficientStockException.class, () -> p.sell(5));
+        assertEquals("FE-01", e.getSku());
+        assertEquals(5, e.getRequested());
+        assertEquals(2, e.getAvailable());
         assertEquals(2, p.getStock(), "lo stock non deve cambiare dopo un errore");
     }
 

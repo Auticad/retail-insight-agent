@@ -2,14 +2,17 @@ package io.github.auticad.retail.service;
 
 import io.github.auticad.retail.model.Product;
 import io.github.auticad.retail.model.Sale;
-import io.github.auticad.retail.model.Store;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Collection;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /**
  * Calcoli dei principali indicatori di vendita.
- * Guida A: metodi su prezzo, costo e quantità. Guida B: overload su Product e Sale[].
+ * I metodi su prezzo, costo e quantità sono i mattoni; quelli su Sale lavorano con gli stream.
  */
 public final class KpiCalculator {
 
@@ -19,7 +22,7 @@ public final class KpiCalculator {
         // classe di utilità: solo metodi statici, non istanziabile
     }
 
-    // ----- guida A -----
+    // ----- prezzo, costo, quantità -----
 
     /** Fatturato = prezzo unitario × quantità. */
     public static BigDecimal fatturato(BigDecimal prezzo, int quantita) {
@@ -39,7 +42,15 @@ public final class KpiCalculator {
         if (prezzo.signum() <= 0) {
             throw new IllegalArgumentException("Il prezzo deve essere positivo");
         }
-        return prezzo.subtract(costo).multiply(CENTO).divide(prezzo, 2, RoundingMode.HALF_UP);
+        return percentuale(prezzo.subtract(costo), prezzo);
+    }
+
+    /** parte / totale × 100 a due decimali; zero se il totale è zero (nessuna vendita, nessuna divisione). */
+    public static BigDecimal percentuale(BigDecimal parte, BigDecimal totale) {
+        if (totale.signum() == 0) {
+            return BigDecimal.ZERO.setScale(2);
+        }
+        return parte.multiply(CENTO).divide(totale, 2, RoundingMode.HALF_UP);
     }
 
     /**
@@ -63,7 +74,7 @@ public final class KpiCalculator {
         return importo.multiply(BigDecimal.valueOf(percentuale)).divide(CENTO, 2, RoundingMode.HALF_UP);
     }
 
-    // ----- guida B: overload sugli oggetti di dominio -----
+    // ----- prodotti -----
 
     /** Fatturato di un prodotto venduto a prezzo di listino. */
     public static BigDecimal fatturato(Product p, int quantita) {
@@ -78,40 +89,25 @@ public final class KpiCalculator {
         return marginePercentuale(p.getPrice(), p.getCost());
     }
 
-    /** Somma degli importi di tutte le vendite. */
-    public static BigDecimal fatturatoTotale(Sale[] vendite) {
-        BigDecimal totale = BigDecimal.ZERO;
-        for (Sale s : vendite) {
-            totale = totale.add(s.amount());           // BigDecimal è immutabile: va riassegnato
-        }
-        return totale;
+    // ----- vendite, con gli stream -----
+
+    /** Somma degli importi: map + reduce con identità ZERO, quindi zero per una collezione vuota. */
+    public static BigDecimal fatturatoTotale(Collection<Sale> vendite) {
+        return vendite.stream()
+                .map(Sale::amount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    /**
-     * Fatturato per negozio, nello stesso ordine dell'array negozi.
-     * Le vendite di negozi non presenti nell'array vengono ignorate.
-     * (Dal giorno 12 diventerà una Map&lt;String, BigDecimal&gt;.)
-     */
-    public static BigDecimal[] fatturatoPerNegozio(Sale[] vendite, Store[] negozi) {
-        BigDecimal[] totali = new BigDecimal[negozi.length];
-        for (int i = 0; i < negozi.length; i++) {
-            totali[i] = BigDecimal.ZERO;
-        }
-        for (Sale s : vendite) {
-            int i = indiceNegozio(negozi, s.storeId());
-            if (i >= 0) {
-                totali[i] = totali[i].add(s.amount());
-            }
-        }
-        return totali;
+    /** Pezzi venduti in totale. */
+    public static int pezziTotali(Collection<Sale> vendite) {
+        return vendite.stream().mapToInt(Sale::quantity).sum();
     }
 
-    private static int indiceNegozio(Store[] negozi, String id) {
-        for (int i = 0; i < negozi.length; i++) {
-            if (negozi[i].getId().equals(id)) {
-                return i;
-            }
-        }
-        return -1;
+    /** Fatturato per codice negozio, in ordine di codice: l'equivalente di SELECT store_id, SUM(...) GROUP BY store_id. */
+    public static Map<String, BigDecimal> fatturatoPerNegozio(Collection<Sale> vendite) {
+        return vendite.stream().collect(Collectors.groupingBy(
+                Sale::storeId,
+                TreeMap::new,
+                Collectors.reducing(BigDecimal.ZERO, Sale::amount, BigDecimal::add)));
     }
 }

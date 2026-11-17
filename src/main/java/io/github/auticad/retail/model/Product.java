@@ -1,5 +1,7 @@
 package io.github.auticad.retail.model;
 
+import io.github.auticad.retail.exception.InsufficientStockException;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -21,7 +23,7 @@ public class Product {
     private BigDecimal cost;
     private int stock;
 
-    /** Prodotto appena inserito a catalogo, senza scorte (giorno 8: costruttori concatenati). */
+    /** Prodotto appena inserito a catalogo, senza scorte. */
     public Product(String sku, String name, String category, BigDecimal price, BigDecimal cost) {
         this(sku, name, category, price, cost, 0);
     }
@@ -49,7 +51,7 @@ public class Product {
 
     // ----- modifiche validate -----
 
-    // final: sono chiamati dal costruttore, una sottoclasse non deve poterli ridefinire (giorno 10)
+    // final: sono chiamati dal costruttore, una sottoclasse non deve poterli ridefinire
     public final void setName(String name) {
         this.name = requireText(name, "nome");
     }
@@ -72,12 +74,17 @@ public class Product {
 
     // ----- operazioni di dominio: niente setStock -----
 
+    /**
+     * Scarica dal magazzino qty pezzi.
+     * @throws InsufficientStockException se le scorte non bastano; in quel caso lo stock non cambia
+     */
+
     public void sell(int qty) {
         if (qty <= 0) {
             throw new IllegalArgumentException("quantità non valida: " + qty);
         }
         if (qty > stock) {
-            throw new IllegalStateException("scorte insufficienti per " + sku + ": disponibili " + stock + ", richiesti " + qty);
+            throw new InsufficientStockException(sku, qty, stock);
         }
         stock -= qty;
     }

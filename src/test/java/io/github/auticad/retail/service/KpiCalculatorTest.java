@@ -2,11 +2,12 @@ package io.github.auticad.retail.service;
 
 import io.github.auticad.retail.model.Product;
 import io.github.auticad.retail.model.Sale;
-import io.github.auticad.retail.model.Store;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -17,7 +18,7 @@ class KpiCalculatorTest {
 
     @Test
     void revenueMarginAndMarginPercent() {
-        // stessi valori della prova rapida della guida A
+        // 24,90 € di prezzo, 11,20 € di costo, 140 pezzi
         assertEquals(0, new BigDecimal("3486.00").compareTo(KpiCalculator.fatturato(PREZZO, 140)));
         assertEquals(0, new BigDecimal("1918.00").compareTo(KpiCalculator.margine(PREZZO, COSTO, 140)));
         assertEquals(new BigDecimal("55.02"), KpiCalculator.marginePercentuale(PREZZO, COSTO));
@@ -52,27 +53,31 @@ class KpiCalculatorTest {
     }
 
     @Test
-    void totalAndPerStoreRevenue() {
+    void totalPiecesAndPerStoreRevenueWithStreams() {
         LocalDate d = LocalDate.of(2026, 11, 2);
-        Sale[] vendite = {
-            new Sale("S1", "FE-01", d, 2, new BigDecimal("39.90")),   // 79,80
+        List<Sale> vendite = List.of(
             new Sale("S2", "TS-03", d, 3, new BigDecimal("14.90")),   // 44,70
-            new Sale("S1", "JE-02", d, 1, new BigDecimal("59.00")),   // 59,00
-            new Sale("S9", "JE-02", d, 1, new BigDecimal("59.00"))    // negozio sconosciuto
-        };
-        Store[] negozi = {
-            new Store("S1", "Monza Centro", "Monza", 180),
-            new Store("S2", "Lissone", "Lissone", 95)
-        };
+            new Sale("S1", "FE-01", d, 2, new BigDecimal("39.90")),   // 79,80
+            new Sale("S1", "JE-02", d, 1, new BigDecimal("59.00"))    // 59,00
+        );
+        assertEquals(0, new BigDecimal("183.50").compareTo(KpiCalculator.fatturatoTotale(vendite)));
+        assertEquals(6, KpiCalculator.pezziTotali(vendite));
 
-        assertEquals(0, new BigDecimal("242.50").compareTo(KpiCalculator.fatturatoTotale(vendite)));
-        BigDecimal[] perNegozio = KpiCalculator.fatturatoPerNegozio(vendite, negozi);
-        assertEquals(0, new BigDecimal("138.80").compareTo(perNegozio[0]));
-        assertEquals(0, new BigDecimal("44.70").compareTo(perNegozio[1]));
+        Map<String, BigDecimal> perNegozio = KpiCalculator.fatturatoPerNegozio(vendite);
+        assertEquals(List.of("S1", "S2"), List.copyOf(perNegozio.keySet()), "chiavi in ordine di codice");
+        assertEquals(0, new BigDecimal("138.80").compareTo(perNegozio.get("S1")));
+        assertEquals(0, new BigDecimal("44.70").compareTo(perNegozio.get("S2")));
     }
 
     @Test
     void noSalesMeansZero() {
-        assertEquals(0, KpiCalculator.fatturatoTotale(new Sale[0]).signum());
+        assertEquals(0, KpiCalculator.fatturatoTotale(List.of()).signum());
+        assertTrue(KpiCalculator.fatturatoPerNegozio(List.of()).isEmpty());
+    }
+
+    @Test
+    void percentageOfZeroTotalIsZero() {
+        assertEquals(new BigDecimal("0.00"), KpiCalculator.percentuale(BigDecimal.TEN, BigDecimal.ZERO));
+        assertEquals(new BigDecimal("33.33"), KpiCalculator.percentuale(BigDecimal.ONE, new BigDecimal("3")));
     }
 }

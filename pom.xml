@@ -7,7 +7,7 @@
   <groupId>io.github.auticad</groupId>
   <!-- artifactId diverso dal repository: in Eclipse i due progetti possono stare nello stesso workspace -->
   <artifactId>retail-insight-agent-soluzione-b</artifactId>
-  <version>0.3.0-SNAPSHOT</version>
+  <version>0.4.0-SNAPSHOT</version>
   <name>Retail Insight Agent - soluzione guida B</name>
   <description>Soluzione di riferimento del progetto guida a fine guida B (tappe 8-11)</description>
 
